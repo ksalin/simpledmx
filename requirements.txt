@@ -1,0 +1,3 @@
+# Install with:  py -m pip install -r requirements.txt
+# (signal and tkinter are part of the Python standard library.)
+udmx-pyusb
