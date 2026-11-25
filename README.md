@@ -10,11 +10,19 @@ Uses the udmx-pyusb package for communication, maintained by dhocker at https://
 
 ## Status
 
-Still work in progress, writes only random values to channels.
+Still work in progress!
 
-Will have adjustable sliders in a window. Animation will be done by toggleable sine wave with adjustable speed (a second slider per channel.) Channel count and labels will be in a configuration py-file. If there is time, it will also have a few quick save / load presets for the channel value and effect slider's positions as profiles the user can quickly switch between and keep adjusting.
+Implemented:
+- Can adjust each channels values 0-255 with sliders in real time
+- Channels are labeled
 
-Will be tested only on Windows 11, possibly later on Linux if the adapter is compatible.
+TODO:
+- Controls to apply a waveform effect to main sliders on each channel
+- Quick save/load profile slots
+- Status message on the lower part of the window could be dynamic about what was last done
+- Icon for the application / its window
+
+Tested only on Windows 11, not yet on Linux.
 
 ## Install
     python -m pip install -r requirements.txt

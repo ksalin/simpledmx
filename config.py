@@ -7,23 +7,25 @@ Edit the values below and restart simpledmx.py to apply them.
 # Channel labels, one per DMX channel, in channel order (the first entry is
 # DMX channel 1). The number of faders in the window equals the number of
 # entries here, so add or remove lines to change the channel count.
+
+# Fuzzix Stellar 2 at A001
 CHANNEL_NAMES = [
-    "Channel 1",
-    "Channel 2",
-    "Channel 3",
-    "Channel 4",
-    "Channel 5",
-    "Channel 6",
-    "Channel 7",
-    "Channel 8",
-    "Channel 9",
-    "Channel 10",
-    "Channel 11",
-    "Channel 12",
-    "Channel 13",
-    "Channel 14",
-    "Channel 15",
-    "Channel 16",
+    "Bee Angle or Speed",    # Channel 1, 0-127 = Static angle, 128-191 = Continuous clockwise speed, 192-255 = Continuous anticlockwise speed
+    "Gobo Speed",            # Channel 2
+    "Laser Speed",           # Channel 3
+    "Master Brightness",     # Channel 4
+    "All Flicker",           # Channel 5, 0-9 = Continuous, 10 = Slow flicker, 255 = Fast flicker
+    "Bee Red",               # Channel 6
+    "Bee Green",             # Channel 7
+    "Bee Blue",              # Channel 8
+    "Bee White",             # Channel 9
+    "Gobo Brightness",       # Channel 10, Gobo brightness
+    "Red Shape Laser",       # Channel 11
+    "Green Shape Laser",     # Channel 12
+    "Red Dot Laser",         # Channel 13
+    "Green Dot Laser",       # Channel 14
+    "Strobe",                # Channel 15, lower = off/slow flickering, higher = rapid flickering
+    "Full On"                # Channel 16
 ]
 
 
@@ -35,7 +37,7 @@ TEXT_DIM = "#8a8d93"     # values at zero and the status line
 TICK = "#5a5d63"         # scale marks above and below the groove
 GROOVE = "#0c0c0d"       # the slot the fader cap slides in
 GROOVE_EDGE = "#45484e"  # outline of the groove
-LEVEL = "#e0a030"        # lit part of the groove, up to the current value
+LEVEL = "#30c0f0"        # lit part of the groove, up to the current value
 CAP_BODY = "#c9cbcf"     # fader cap face
 CAP_LIGHT = "#f2f3f5"    # fader cap highlights
 CAP_SHADOW = "#7d8086"   # fader cap edges and grip ridges
