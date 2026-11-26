@@ -29,6 +29,18 @@ CHANNEL_NAMES = [
 ]
 
 
+# Animation timer: the tightest interval, in milliseconds, at which animated
+# channels are recalculated and sent to the DMX bus. 50 ms = 20 updates per
+# second, which keeps the uDMX serial bus and the window redraws from being
+# overloaded. Waveforms faster than half this rate (10 Hz at 50 ms) cannot be
+# reproduced faithfully and will alias.
+ANIMATION_INTERVAL_MS = 50
+
+# Waveforms offered in each channel's dropdown, and the default choice.
+WAVEFORMS = ["sine", "cosine", "square", "sawtooth", "noise"]
+DEFAULT_WAVEFORM = "sine"
+
+
 # Colours for the mixing-desk look, as "#rrggbb" hex values.
 BG = "#1e1f22"           # window background
 PANEL = "#2a2c30"        # background behind each fader
@@ -45,3 +57,8 @@ CAP_LINE = "#1a1a1a"     # centre line on the fader cap
 CAP_OUTLINE = "#3a3c40"  # thin border around the fader cap
 CAP_DROP_SHADOW = "#111111"  # shadow under the fader cap
 ERROR_TEXT = "#ff6b6b"   # status line when sending to the device fails
+ENTRY_BG = "#141517"     # from / to / Hz text boxes
+ENTRY_INVALID = "#5a1e1e"  # text box background when its value is not valid
+BUTTON_BG = "#3a3c40"    # waveform dropdown and play/stop buttons
+BUTTON_ACTIVE = "#4a4d52"  # buttons under the mouse
+PLAYING = "#2e9e4f"      # play/stop button while the channel is animating

@@ -4,7 +4,10 @@ Simple DMX
 (C) 2026 Kati Salin under GNU GPL v2 license. ChatGPT and Claude Code used to assist in and to speed up the coding process.
 """
 
+import math
+import random
 import signal
+import time
 import tkinter as tk
 
 from pyudmx import pyudmx # The library used for uDMX communication, install via requirements.txt
@@ -32,12 +35,13 @@ class Fader(tk.Canvas):
         )
         self.command = command
         self.value = 0
+        self.locked = False  # True while the channel is animated
         self._drag_offset = 0
 
         self.bind("<Configure>", lambda _e: self._redraw())
         self.bind("<Button-1>", self._on_press)
         self.bind("<B1-Motion>", self._on_drag)
-        self.bind("<Double-Button-1>", lambda _e: self.set_value(0))
+        self.bind("<Double-Button-1>", self._on_double_click)
         self.bind("<MouseWheel>", self._on_wheel)                 # Windows
         self.bind("<Button-4>", lambda e: self._on_wheel(e, +1))  # Linux
         self.bind("<Button-5>", lambda e: self._on_wheel(e, -1))  # Linux
@@ -102,16 +106,31 @@ class Fader(tk.Canvas):
 
     # --- interaction ----------------------------------------------------
 
-    def set_value(self, value):
+    def set_value(self, value, notify=True):
+        """Move the cap. Returns True if the value changed. With notify=False
+        the command callback is skipped (the caller sends the value itself)."""
         value = min(max(int(value), 0), DMX_MAX)
         if value == self.value:
-            return
+            return False
         self.value = value
         self._redraw()
-        self.command(value)
+        if notify:
+            self.command(value)
+        return True
+
+    def set_locked(self, locked):
+        """Ignore mouse input while the channel is being animated."""
+        self.locked = locked
+        self.configure(cursor="arrow" if locked else "hand2")
+
+    def _on_double_click(self, _event):
+        if not self.locked:
+            self.set_value(0)
 
     def _on_press(self, event):
         self.focus_set()
+        if self.locked:
+            return
         cap_x = self._value_to_x(self.value)
         if abs(event.x - cap_x) <= self.CAP_WIDTH // 2:
             # Grabbed the cap: keep the grab point under the mouse.
@@ -122,13 +141,136 @@ class Fader(tk.Canvas):
             self.set_value(self._x_to_value(event.x))
 
     def _on_drag(self, event):
+        if self.locked:
+            return
         self.set_value(self._x_to_value(event.x - self._drag_offset))
 
     def _on_wheel(self, event, direction=None):
+        if self.locked:
+            return
         if direction is None:
             direction = 1 if event.delta > 0 else -1
         step = 10 if event.state & 0x0001 else 1  # Shift held
         self.set_value(self.value + direction * step)
+
+
+def waveform_level(waveform, phase, noise_level):
+    """Level 0.0-1.0 of a waveform at phase 0.0-1.0 (one cycle)."""
+    if waveform == "sine":
+        return 0.5 + 0.5 * math.sin(2 * math.pi * phase)
+    if waveform == "cosine":
+        return 0.5 + 0.5 * math.cos(2 * math.pi * phase)
+    if waveform == "square":
+        return 1.0 if phase < 0.5 else 0.0
+    if waveform == "sawtooth":
+        return phase
+    if waveform == "noise":
+        return noise_level  # a new random level is picked once per cycle
+    return 0.0
+
+
+class ChannelAnimation:
+    """The from / to / Hz / waveform / play controls of one channel."""
+
+    def __init__(self, master, row, fader, on_value):
+        self.fader = fader
+        self.on_value = on_value  # called with each new animated value
+        self.playing = False
+        self.phase = 0.0
+        self.noise_level = 0.0
+
+        # Last valid settings; invalid typing keeps these until it is fixed.
+        self.low = 0
+        self.high = DMX_MAX
+        self.hz = 1.0
+
+        self.low_var = tk.StringVar(value=str(self.low))
+        self.high_var = tk.StringVar(value=str(self.high))
+        self.hz_var = tk.StringVar(value=f"{self.hz:.3f}")
+        self.wave_var = tk.StringVar(value=DEFAULT_WAVEFORM)
+
+        self.low_entry = self._entry(master, self.low_var, 4, row, 3)
+        self.high_entry = self._entry(master, self.high_var, 4, row, 4)
+        self.hz_entry = self._entry(master, self.hz_var, 7, row, 5)
+        self.low_var.trace_add("write", lambda *_: self._parse_range())
+        self.high_var.trace_add("write", lambda *_: self._parse_range())
+        self.hz_var.trace_add("write", lambda *_: self._parse_hz())
+
+        menu = tk.OptionMenu(master, self.wave_var, *WAVEFORMS)
+        menu.configure(bg=BUTTON_BG, fg=TEXT, activebackground=BUTTON_ACTIVE,
+                       activeforeground=TEXT, highlightthickness=0, bd=0,
+                       relief="flat", width=8, font=("Segoe UI", 9))
+        menu["menu"].configure(bg=BUTTON_BG, fg=TEXT,
+                               activebackground=LEVEL, activeforeground=BG)
+        menu.grid(row=row, column=6, padx=(6, 0))
+
+        self.play_button = tk.Button(
+            master, text="▶", width=3, command=self.toggle,
+            bg=BUTTON_BG, fg=TEXT, activebackground=BUTTON_ACTIVE,
+            activeforeground=TEXT, relief="flat", bd=0,
+            font=("Segoe UI Symbol", 10))
+        self.play_button.grid(row=row, column=7, padx=(6, 0))
+
+    @staticmethod
+    def _entry(master, var, width, row, column):
+        entry = tk.Entry(master, textvariable=var, width=width, justify="right",
+                         bg=ENTRY_BG, fg=TEXT, insertbackground=TEXT,
+                         relief="flat", highlightthickness=1,
+                         highlightbackground=GROOVE_EDGE,
+                         highlightcolor=LEVEL, font=("Consolas", 10))
+        entry.grid(row=row, column=column, padx=(6, 0), ipady=2)
+        return entry
+
+    # --- input validation -----------------------------------------------
+
+    def _parse_range(self):
+        for var, entry, attr in ((self.low_var, self.low_entry, "low"),
+                                 (self.high_var, self.high_entry, "high")):
+            try:
+                value = int(var.get().strip())
+                valid = 0 <= value <= DMX_MAX
+            except ValueError:
+                valid = False
+            if valid:
+                setattr(self, attr, value)
+            entry.configure(bg=ENTRY_BG if valid else ENTRY_INVALID)
+
+    def _parse_hz(self):
+        try:
+            value = float(self.hz_var.get().strip().replace(",", "."))
+            valid = math.isfinite(value) and value >= 0
+        except ValueError:
+            valid = False
+        if valid:
+            self.hz = value
+        self.hz_entry.configure(bg=ENTRY_BG if valid else ENTRY_INVALID)
+
+    # --- play / stop ----------------------------------------------------
+
+    def toggle(self):
+        self.playing = not self.playing
+        if self.playing:
+            self.phase = 0.0
+            self.noise_level = random.random()
+        self.fader.set_locked(self.playing)
+        self.play_button.configure(
+            text="■" if self.playing else "▶",
+            bg=PLAYING if self.playing else BUTTON_BG)
+
+    def advance(self, seconds):
+        """Step the waveform forward and move the fader. Returns True if
+        the channel's value changed."""
+        self.phase += self.hz * seconds
+        if self.phase >= 1.0:
+            self.phase -= math.floor(self.phase)
+            self.noise_level = random.random()
+        level = waveform_level(self.wave_var.get(), self.phase,
+                               self.noise_level)
+        value = round(self.low + (self.high - self.low) * level)
+        if self.fader.set_value(value, notify=False):
+            self.on_value(value)
+            return True
+        return False
 
 
 class DmxWindow:
@@ -145,18 +287,26 @@ class DmxWindow:
         # display scaling the usable screen is smaller, e.g. 1536x864 at 125%.
         screen_w = min(root.winfo_screenwidth(), 1920)
         screen_h = min(root.winfo_screenheight(), 1080)
-        fader_width = max(400, min(1400, screen_w - 380))
-        fader_height = (screen_h - 160) // CHANNEL_COUNT - 4
+        fader_width = max(400, min(1400, screen_w - 720))
+        fader_height = (screen_h - 190) // CHANNEL_COUNT - 4
         fader_height = max(Fader.MIN_HEIGHT, min(Fader.MAX_HEIGHT, fader_height))
 
         frame = tk.Frame(root, bg=BG, padx=16, pady=12)
         frame.pack(fill="both", expand=True)
         frame.columnconfigure(1, weight=1)
 
+        for column, title in ((3, "From"), (4, "To"), (5, "Hz"),
+                              (6, "Waveform"), (7, "Play")):
+            tk.Label(frame, text=title, bg=BG, fg=TEXT_DIM,
+                     font=("Segoe UI", 9)).grid(row=0, column=column,
+                                                padx=(6, 0))
+
         self.value_labels = []
         self.faders = []
-        for row, name in enumerate(CHANNEL_NAMES):
-            channel = row + 1  # uDMX channel numbers are one-based
+        self.animations = []
+        for index, name in enumerate(CHANNEL_NAMES):
+            channel = index + 1  # uDMX channel numbers are one-based
+            row = index + 1      # row 0 holds the column titles
 
             tk.Label(frame, text=name, bg=BG, fg=TEXT, anchor="e",
                      font=("Segoe UI", 11), width=16).grid(
@@ -175,17 +325,53 @@ class DmxWindow:
             fader.grid(row=row, column=1, sticky="ew", pady=2)
             self.faders.append(fader)
 
+            self.animations.append(ChannelAnimation(
+                frame, row, fader,
+                on_value=lambda value, ch=channel: self._show_value(ch, value),
+            ))
+
         self.status = tk.Label(root, text="Connected to uDMX.", bg=BG,
                                fg=TEXT_DIM, anchor="w", padx=16)
         self.status.pack(fill="x", pady=(0, 8))
 
         root.protocol("WM_DELETE_WINDOW", root.destroy)
 
-    def _on_change(self, channel, value):
+        # Animation timer: runs every ANIMATION_INTERVAL_MS for the whole
+        # session and drives the channels whose play button is on.
+        self._last_tick = time.perf_counter()
+        root.after(ANIMATION_INTERVAL_MS, self._tick)
+
+    def _tick(self):
+        started = time.perf_counter()
+        # Use the real elapsed time, so the waveform speed stays correct even
+        # if the timer fires late (e.g. while the window is being dragged).
+        elapsed = started - self._last_tick
+        self._last_tick = started
+
+        changed = False
+        for animation in self.animations:
+            if animation.playing:
+                changed |= animation.advance(elapsed)
+
+        if changed:
+            # One USB transfer for all channels instead of one per channel.
+            self._send(lambda: self.device.send_multi_value(
+                1, [fader.value for fader in self.faders]))
+
+        spent_ms = int((time.perf_counter() - started) * 1000)
+        self.root.after(max(1, ANIMATION_INTERVAL_MS - spent_ms), self._tick)
+
+    def _show_value(self, channel, value):
         self.value_labels[channel - 1].configure(
             text=str(value), fg=TEXT if value else TEXT_DIM)
+
+    def _on_change(self, channel, value):
+        self._show_value(channel, value)
+        self._send(lambda: self.device.send_single_value(channel, value))
+
+    def _send(self, send):
         try:
-            self.device.send_single_value(channel, value)
+            send()
         except Exception as exc:
             self.status.configure(text=f"Send failed: {exc}", fg=ERROR_TEXT)
             if not self._send_error_shown:
