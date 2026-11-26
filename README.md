@@ -20,22 +20,25 @@ Implemented:
 TODO:
 - Quick save/load profile slots
 - Status message on the lower part of the window could be dynamic about what was last done
-- Icon for the application / its window
 
 Tested only on Windows 11, not yet on Linux.
 
-## Install
+## Install and usage
+
+To run as-is:
     python -m pip install -r requirements.txt
+    python simpledmx.py
+
+To build a distribution:
+    pip install pyinstaller
+    make_dist.bat or ./make_dist.sh
+
+Close the window (or press Ctrl+C in the terminal) to stop. Sets all channels to zero before closing the interface.
 
 ## Configuration
 Modify the config.py file to set labels for channels, which also tells the amount of channels to use (counting from the starting address of 1.)
 
 `ANIMATION_INTERVAL_MS` in config.py sets how often animated channels are updated (default 50 ms = 20 times a second, to avoid flooding the DMX bus and the window). Waveforms faster than half that rate (10 Hz by default) will alias.
-
-## Usage
-    python simpledmx.py
-
-Close the window (or press Ctrl+C in the terminal) to stop. Sets all channels to zero before closing the interface.
 
 ## Fader controls
     drag the fader cap, or click anywhere on the track to jump there
