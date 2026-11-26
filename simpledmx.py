@@ -9,15 +9,21 @@ import random
 import signal
 import time
 import tkinter as tk
-
+import sys
+from pathlib import Path
 from pyudmx import pyudmx # The library used for uDMX communication, install via requirements.txt
 
 from config import *  # all settings: channel names, colours, ...
 
+if getattr(sys, "frozen", False):
+    APP_DIR = Path(sys._MEIPASS)
+else:
+    APP_DIR = Path.cwd() #Path(__file__).resolve().parent
+
 CHANNEL_COUNT = len(CHANNEL_NAMES) # Number of channels comes from configuration - each channel must be labeled with a name
 DMX_MAX = 255 # Value per channel is between 0 and 255, 8 bits
-
-
+PNG_ICON = APP_DIR / "simpledmx_icon.png"
+        
 class Fader(tk.Canvas):
     """A horizontal fader drawn to look like a mixing console slider."""
 
@@ -281,6 +287,11 @@ class DmxWindow:
 
         root.title("Simple DMX")
         root.configure(bg=BG)
+
+        if PNG_ICON.exists():
+            icon_png = tk.PhotoImage(file=str(PNG_ICON))
+            root.iconphoto(True, icon_png)
+            root._icon = icon_png # Keep image reference alive
 
         # Size the faders so the window fits on the screen (max 1920x1080,
         # leaving room for the taskbar and window decorations). With Windows
